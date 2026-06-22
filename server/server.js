@@ -35,12 +35,8 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(s => s.trim());
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(null, true);
-  },
+  origin: 'https://pong-rush-six.vercel.app',
   credentials: true,
   optionsSuccessStatus: 200
 }));
