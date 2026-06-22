@@ -36,9 +36,10 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 app.use(cors({
-  origin: 'https://pong-rush-six.vercel.app',
-  credentials: true,
-  optionsSuccessStatus: 200
+    origin: "https://pong-rush.onrender.com",
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', "X-Requested-With"],
+    credentials: true,
 }));
 
 app.use(express.json({ limit: '10mb' }));
