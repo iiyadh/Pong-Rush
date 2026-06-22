@@ -201,7 +201,9 @@ const setupSocket = (server) => {
               { userId: socket.userId, username: socket.username, socketId: socket.id }
             ],
             gameState: initializeGame(),
-            playerReady: {}
+            playerReady: {},
+            paused: false,
+            pauseVotes: {}
           };
 
           gameRooms.set(roomId, room);
@@ -262,7 +264,9 @@ const setupSocket = (server) => {
             id: roomId,
             players: [],
             gameState: null,
-            playerReady: {}
+            playerReady: {},
+            paused: false,
+            pauseVotes: {}
           });
         }
 
@@ -359,6 +363,31 @@ const setupSocket = (server) => {
         room.gameState.paddle1.y = paddleY;
       } else if (playerIdx === 1) {
         room.gameState.paddle2.y = paddleY;
+      }
+    });
+
+    socket.on('pause-toggle', (roomId) => {
+      const room = gameRooms.get(roomId);
+      if (!room || !room.gameState || room.gameState.status !== 'playing') return;
+
+      room.pauseVotes[socket.userId] = !room.pauseVotes[socket.userId];
+      const allVoted = room.players.every(p => room.pauseVotes[p.userId]);
+
+      if (allVoted) {
+        room.paused = !room.paused;
+        room.pauseVotes = {};
+        if (room.paused) {
+          stopGameLoop(roomId);
+          io.to(roomId).emit('game-paused');
+        } else {
+          startGameLoop(roomId, io);
+          io.to(roomId).emit('game-resumed');
+        }
+      } else {
+        const voter = room.players.find(p => room.pauseVotes[p.userId]);
+        io.to(roomId).emit('pause-requested', {
+          username: voter?.username || socket.username
+        });
       }
     });
 

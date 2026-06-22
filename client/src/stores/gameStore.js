@@ -10,6 +10,8 @@ export const useGameStore = create((set, get) => ({
   gameOver: false,
   winner: null,
   disconnected: null,
+  isPaused: false,
+  pauseRequester: null,
   isConnecting: false,
   isSinglePlayer: false,
   isSearching: false,
@@ -28,6 +30,7 @@ export const useGameStore = create((set, get) => ({
   setPlayers: (players) => set({ players }),
   setGameOver: (gameOver, winner = null, disconnected = null) => set({ gameOver, winner, disconnected }),
   setConnecting: (isConnecting) => set({ isConnecting }),
+  setPaused: (isPaused, pauseRequester = null) => set({ isPaused, pauseRequester }),
   setSinglePlayer: (isSinglePlayer) => set({ isSinglePlayer }),
   setSearching: (isSearching) => set({ isSearching }),
   
@@ -41,6 +44,8 @@ export const useGameStore = create((set, get) => ({
     gameOver: false,
     winner: null,
     disconnected: null,
+    isPaused: false,
+    pauseRequester: null,
     isConnecting: false,
     isSinglePlayer: false,
     isSearching: false

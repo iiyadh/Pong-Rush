@@ -99,6 +99,8 @@ const Game = () => {
     gameOver,
     winner,
     disconnected,
+    isPaused,
+    pauseRequester,
     players,
     score,
     roomId,
@@ -110,6 +112,7 @@ const Game = () => {
     setPlayers,
     setRoomId,
     setGameOver,
+    setPaused,
     setConnecting,
     resetGame,
   } = useGameStore();
@@ -157,6 +160,12 @@ const Game = () => {
 
       const g = gameStateRef.current;
       const keys = keysRef.current;
+
+      if (useGameStore.getState().isPaused) {
+        setGameState({ ...gameStateRef.current });
+        animId = requestAnimationFrame(loop);
+        return;
+      }
 
       if (scoreDelayUntilRef.current > 0 && timestamp < scoreDelayUntilRef.current) {
         setGameState({ ...gameStateRef.current });
@@ -329,11 +338,26 @@ const Game = () => {
       console.log('[GAME] Received player-disconnected');
       setGameOver(true, null);
     };
+    const onGamePaused = () => {
+      console.log('[GAME] Game paused');
+      setPaused(true, null);
+    };
+    const onGameResumed = () => {
+      console.log('[GAME] Game resumed');
+      setPaused(false, null);
+    };
+    const onPauseRequested = (data) => {
+      console.log('[GAME] Pause requested by:', data.username);
+      setPaused(false, data.username);
+    };
 
     socket.on('game-begin', onGameBegin);
     socket.on('game-state', onGameState);
     socket.on('game-over', onGameOver);
     socket.on('player-disconnected', onPlayerDisconnected);
+    socket.on('game-paused', onGamePaused);
+    socket.on('game-resumed', onGameResumed);
+    socket.on('pause-requested', onPauseRequested);
 
     let animId;
     let mpLastTime = 0;
@@ -390,6 +414,9 @@ const Game = () => {
       socket.off('game-state', onGameState);
       socket.off('game-over', onGameOver);
       socket.off('player-disconnected', onPlayerDisconnected);
+      socket.off('game-paused', onGamePaused);
+      socket.off('game-resumed', onGameResumed);
+      socket.off('pause-requested', onPauseRequested);
       cancelAnimationFrame(animId);
     };
   }, [isSinglePlayer, token]);
@@ -400,16 +427,28 @@ const Game = () => {
       if (e.code === 'Space') {
         e.preventDefault();
         const state = useGameStore.getState();
-        if (!state.isGameReady || state.isGameStarted || state.gameOver) return;
+        if (state.gameOver) return;
+
+        if (!state.isGameReady) return;
 
         if (state.isSinglePlayer) {
-          console.log('[GAME] SPACE pressed - starting single player');
-          setGameStarted(true);
+          if (state.isGameStarted) {
+            console.log('[GAME] SPACE pressed - toggling single player pause');
+            setPaused(!state.isPaused, null);
+          } else {
+            console.log('[GAME] SPACE pressed - starting single player');
+            setGameStarted(true);
+          }
           return;
         }
 
         const socket = socketRef.current;
-        if (socket) {
+        if (!socket || !state.roomId) return;
+
+        if (state.isGameStarted) {
+          console.log('[GAME] SPACE pressed - emitting pause-toggle');
+          socket.emit('pause-toggle', state.roomId);
+        } else {
           console.log('[GAME] SPACE pressed - emitting player-ready, roomId:', state.roomId);
           setIAmReady(true);
           socket.emit('player-ready', state.roomId);
@@ -519,10 +558,28 @@ const Game = () => {
               </div>
             </div>
 
-            <GameCanvas
-              gameState={gameState}
-              lastHitTime={lastHitTimeRef.current}
-            />
+            <div className="relative">
+              <GameCanvas
+                gameState={gameState}
+                lastHitTime={lastHitTimeRef.current}
+              />
+
+              {isPaused && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-lg">
+                  <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <h2 className="text-3xl font-bold text-accent mb-2">PAUSED</h2>
+                    <p className="text-gray-400">
+                      {isSinglePlayer
+                        ? 'Press SPACE to resume'
+                        : pauseRequester
+                          ? `${pauseRequester} wants to pause — press SPACE`
+                          : 'Press SPACE to resume'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {!isGameStarted && (
               <div className="mt-4 text-center">
