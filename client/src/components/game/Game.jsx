@@ -439,6 +439,11 @@ const Game = () => {
   }, []);
 
   const handleLeaveGame = () => {
+    const socket = socketRef.current;
+    const state = useGameStore.getState();
+    if (socket && state.roomId && !state.isSinglePlayer) {
+      socket.emit('leave-game', state.roomId);
+    }
     resetGame();
     navigate('/lobby');
   };
