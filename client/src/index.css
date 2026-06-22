@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply m-0 p-0 box-border;
+  }
+
+  body {
+    @apply bg-dark text-primary antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-accent/50 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-2.5 bg-accent text-dark font-semibold rounded-lg 
+           transition-all duration-300 hover:scale-105
+           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-opacity-50
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-2.5 bg-secondary text-primary font-semibold rounded-lg
+           transition-all duration-300 hover:scale-105
+           focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-opacity-50
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-outline {
+    @apply px-6 py-2.5 border-2 border-accent text-accent font-semibold rounded-lg
+           transition-all duration-300 hover:bg-accent hover:text-dark
+           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-opacity-50;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 bg-dark/50 border border-gray-700 rounded-lg
+           text-primary placeholder-gray-500
+           focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20
+           transition-all duration-300;
+  }
+  
+  .card {
+    @apply bg-dark/80 backdrop-blur-sm border border-gray-800 rounded-2xl p-8
+           shadow-2xl transition-all duration-300;
+  }
+
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 20px rgba(255, 137, 6, 0.3);
+  }
+
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #f25f4c, #e53170);
+  }
+
+  .bg-gradient-accent {
+    background: linear-gradient(135deg, #ff8906, #f25f4c);
+  }
+}

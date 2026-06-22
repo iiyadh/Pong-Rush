@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>404 - Pong Rush</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #0f0e17;
+        color: #fffffe;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .container { text-align: center; padding: 2rem; }
+      h1 { font-size: 6rem; color: #ff8906; font-weight: 800; }
+      p { font-size: 1.25rem; color: #a1a1aa; margin: 1rem 0 2rem; }
+      a {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        background: #ff8906;
+        color: #0f0e17;
+        text-decoration: none;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        transition: transform 0.3s;
+      }
+      a:hover { transform: scale(1.05); }
+      .ball {
+        width: 80px; height: 80px;
+        background: #ff8906;
+        border-radius: 50%;
+        margin: 0 auto 2rem;
+        animation: bounce 1s ease-in-out infinite alternate;
+      }
+      @keyframes bounce {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-30px); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="ball"></div>
+      <h1>404</h1>
+      <p>This page got served out of bounds.</p>
+      <a href="/">Back to the Game</a>
+    </div>
+  </body>
+</html>

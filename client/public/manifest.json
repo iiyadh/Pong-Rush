@@ -1,0 +1,17 @@
+{
+  "name": "Pong Rush",
+  "short_name": "Pong Rush",
+  "description": "Real-time multiplayer Pong game. Compete with friends and climb the leaderboard.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0e17",
+  "theme_color": "#ff8906",
+  "icons": [
+    {
+      "src": "/src/assets/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

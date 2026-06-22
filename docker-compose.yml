@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  server:
+    build: ./server
+    container_name: pingpong-server
+    restart: always
+    ports:
+      - "${SERVER_PORT:-5000}:5000"
+    env_file:
+      - ./server/.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5173}
+    networks:
+      - pingpong-network
+
+  client:
+    build: ./client
+    container_name: pingpong-client
+    restart: always
+    ports:
+      - "${CLIENT_PORT:-5173}:5173"
+    env_file:
+      - ./client/.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+    depends_on:
+      - server
+    networks:
+      - pingpong-network
+
+networks:
+  pingpong-network:
+    driver: bridge
