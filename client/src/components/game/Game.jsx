@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getSocket } from '../../hooks/useSocket';
@@ -15,6 +15,78 @@ const BALL_SIZE = 12;
 const PADDLE_WIDTH = 12;
 const WIN_SCORE = 11;
 const AI_SPEED = 4.5;
+
+const MAX_BALL_SPEED = 14;
+const AI_REACTION_FACTOR = 0.1;
+const AI_NOISE_SCALE = 0.4;
+
+const PADDLE_ACCEL = 0.8;
+const PADDLE_FRICTION = 0.85;
+
+const BALL_TRAIL_LENGTH = 8;
+const HIT_FEEDBACK_DURATION = 150;
+const SCORE_DELAY_MS = 400;
+
+const SOUND_ENABLED = true;
+
+const P1X = PADDLE_WIDTH + 20;
+const P2X = CANVAS_WIDTH - PADDLE_WIDTH - 20;
+
+let audioCtx = null;
+const getAudioCtx = () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+};
+
+const playBeep = (freq, duration, volume = 0.15) => {
+  if (!SOUND_ENABLED) return;
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration / 1000);
+  } catch (_) {}
+};
+
+const playPaddleHit = () => playBeep(440, 60, 0.12);
+const playWallBounce = () => playBeep(220, 40, 0.08);
+const playScoreSound = () => playBeep(660, 100, 0.15);
+
+const predictBallY = (bx, by, bdx, bdy) => {
+  let x = bx;
+  let y = by;
+  let dx = bdx;
+  let dy = bdy;
+  const maxIter = 200;
+  for (let i = 0; i < maxIter; i++) {
+    x += dx;
+    y += dy;
+    if (y <= BALL_SIZE / 2) {
+      y = BALL_SIZE / 2;
+      dy = Math.abs(dy);
+    }
+    if (y >= CANVAS_HEIGHT - BALL_SIZE / 2) {
+      y = CANVAS_HEIGHT - BALL_SIZE / 2;
+      dy = -Math.abs(dy);
+    }
+    if (dx > 0 && x >= P2X) {
+      return y;
+    }
+    if (dx < 0 && x <= P1X + PADDLE_WIDTH) {
+      return y;
+    }
+  }
+  return y;
+};
 
 const Game = () => {
   const navigate = useNavigate();
@@ -46,81 +118,123 @@ const Game = () => {
   const socketRef = useRef(null);
   const gameStateRef = useRef(null);
   const keysRef = useRef(new Set());
+  const lastTimeRef = useRef(0);
+  const paddle1VelRef = useRef(0);
+  const lastHitTimeRef = useRef(0);
+  const scoreDelayUntilRef = useRef(0);
 
-  // Single player game loop
+  const onHitFeedback = useCallback(() => {
+    lastHitTimeRef.current = performance.now();
+  }, []);
+
   useEffect(() => {
     if (!isSinglePlayer || !isGameStarted || gameOver) return;
 
     const gs = { ...useGameStore.getState().gameState };
     gameStateRef.current = gs;
+    lastTimeRef.current = 0;
+    paddle1VelRef.current = 0;
+    scoreDelayUntilRef.current = 0;
 
-    const p1x = PADDLE_WIDTH + 20;
-    const p2x = CANVAS_WIDTH - PADDLE_WIDTH - 20;
+    let animId;
 
-    const loop = setInterval(() => {
-      if (!gameStateRef.current) return;
+    const loop = (timestamp) => {
+      if (!gameStateRef.current) {
+        animId = requestAnimationFrame(loop);
+        return;
+      }
+
+      if (lastTimeRef.current === 0) {
+        lastTimeRef.current = timestamp;
+        animId = requestAnimationFrame(loop);
+        return;
+      }
+
+      const rawDt = (timestamp - lastTimeRef.current) / (1000 / 60);
+      const dt = Math.min(rawDt, 2);
+      lastTimeRef.current = timestamp;
+
       const g = gameStateRef.current;
       const keys = keysRef.current;
 
-      if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) {
-        g.paddle1.y = Math.max(0, g.paddle1.y - PADDLE_SPEED);
-        paddleYRef.current = g.paddle1.y;
+      if (scoreDelayUntilRef.current > 0 && timestamp < scoreDelayUntilRef.current) {
+        setGameState({ ...gameStateRef.current });
+        animId = requestAnimationFrame(loop);
+        return;
       }
-      if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) {
-        g.paddle1.y = Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, g.paddle1.y + PADDLE_SPEED);
-        paddleYRef.current = g.paddle1.y;
+      scoreDelayUntilRef.current = 0;
+
+      let accel = 0;
+      if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) accel -= PADDLE_ACCEL;
+      if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) accel += PADDLE_ACCEL;
+
+      if (accel !== 0) {
+        paddle1VelRef.current += accel * dt;
+        paddle1VelRef.current = Math.max(-PADDLE_SPEED, Math.min(PADDLE_SPEED, paddle1VelRef.current));
+      } else {
+        paddle1VelRef.current *= Math.pow(PADDLE_FRICTION, dt);
+        if (Math.abs(paddle1VelRef.current) < 0.1) paddle1VelRef.current = 0;
       }
 
-      g.ball.x += g.ball.dx;
-      g.ball.y += g.ball.dy;
+      g.paddle1.y = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, g.paddle1.y + paddle1VelRef.current * dt));
+      paddleYRef.current = g.paddle1.y;
+
+      g.ball.x += g.ball.dx * dt;
+      g.ball.y += g.ball.dy * dt;
 
       if (g.ball.y <= BALL_SIZE / 2 || g.ball.y >= CANVAS_HEIGHT - BALL_SIZE / 2) {
         g.ball.dy = -g.ball.dy;
         g.ball.y = Math.max(BALL_SIZE / 2, Math.min(CANVAS_HEIGHT - BALL_SIZE / 2, g.ball.y));
+        playWallBounce();
+        onHitFeedback();
       }
+
+      const prevBallX = g.ball.x - g.ball.dx * dt;
 
       if (
         g.ball.dx < 0 &&
-        g.ball.x - BALL_SIZE / 2 <= p1x + PADDLE_WIDTH &&
-        g.ball.x - BALL_SIZE / 2 >= p1x &&
+        prevBallX - BALL_SIZE / 2 > P1X + PADDLE_WIDTH &&
+        g.ball.x - BALL_SIZE / 2 <= P1X + PADDLE_WIDTH &&
         g.ball.y >= g.paddle1.y &&
         g.ball.y <= g.paddle1.y + PADDLE_HEIGHT
       ) {
         g.ball.dx = -g.ball.dx * 1.05;
-        g.ball.x = p1x + PADDLE_WIDTH + BALL_SIZE / 2;
+        g.ball.dx = Math.min(Math.abs(g.ball.dx), MAX_BALL_SPEED) * Math.sign(g.ball.dx);
+        g.ball.x = P1X + PADDLE_WIDTH + BALL_SIZE / 2;
         const hitPos = (g.ball.y - g.paddle1.y) / PADDLE_HEIGHT;
         g.ball.dy = (hitPos - 0.5) * 8;
+        playPaddleHit();
+        onHitFeedback();
       }
 
       if (
         g.ball.dx > 0 &&
-        g.ball.x + BALL_SIZE / 2 >= p2x &&
-        g.ball.x + BALL_SIZE / 2 <= p2x + PADDLE_WIDTH &&
+        prevBallX + BALL_SIZE / 2 < P2X &&
+        g.ball.x + BALL_SIZE / 2 >= P2X &&
         g.ball.y >= g.paddle2.y &&
         g.ball.y <= g.paddle2.y + PADDLE_HEIGHT
       ) {
         g.ball.dx = -g.ball.dx * 1.05;
-        g.ball.x = p2x - BALL_SIZE / 2;
+        g.ball.dx = Math.min(Math.abs(g.ball.dx), MAX_BALL_SPEED) * Math.sign(g.ball.dx);
+        g.ball.x = P2X - BALL_SIZE / 2;
         const hitPos = (g.ball.y - g.paddle2.y) / PADDLE_HEIGHT;
         g.ball.dy = (hitPos - 0.5) * 8;
+        playPaddleHit();
+        onHitFeedback();
       }
 
-      if (g.ball.dx > 0 && Math.abs(g.ball.y - (g.paddle2.y + PADDLE_HEIGHT / 2)) > 10) {
-        const aiCenter = g.paddle2.y + PADDLE_HEIGHT / 2;
-        const diff = g.ball.y - aiCenter;
-        let targetY = g.ball.y;
-        if (Math.random() < 0.2) {
-          targetY += (Math.random() - 0.5) * PADDLE_HEIGHT * 0.6;
-        }
-        const targetDiff = targetY - aiCenter;
-        const currentSpeed = Math.random() < 0.15 ? AI_SPEED * 0.5 : AI_SPEED;
-        if (Math.random() > 0.1) {
-          g.paddle2.y += Math.sign(targetDiff) * currentSpeed;
-        }
+      const aiCenter = g.paddle2.y + PADDLE_HEIGHT / 2;
+      let targetY;
+      if (g.ball.dx > 0) {
+        targetY = predictBallY(g.ball.x, g.ball.y, g.ball.dx, g.ball.dy);
+        targetY += (Math.random() - 0.5) * AI_NOISE_SCALE * 30;
+      } else {
+        targetY = CANVAS_HEIGHT / 2;
       }
-      if (g.ball.dx < 0 && Math.random() < 0.03) {
-        g.paddle2.y += (Math.random() - 0.5) * AI_SPEED * 3;
-      }
+
+      const diff = targetY - aiCenter;
+      const noise = (Math.random() - 0.5) * AI_NOISE_SCALE;
+      g.paddle2.y += (diff * AI_REACTION_FACTOR + noise) * dt;
       g.paddle2.y = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, g.paddle2.y));
 
       let scored = false;
@@ -133,28 +247,48 @@ const Game = () => {
       }
 
       if (scored) {
+        playScoreSound();
+        onHitFeedback();
+
         if (g.score.player1 >= WIN_SCORE || g.score.player2 >= WIN_SCORE) {
           const w = g.score.player1 >= WIN_SCORE ? user?.id : 'cpu';
           gameStateRef.current = g;
           setGameState({ ...g });
           setGameOver(true, w);
-          clearInterval(loop);
-
           return;
         }
+
         g.ball.x = CANVAS_WIDTH / 2;
         g.ball.y = CANVAS_HEIGHT / 2;
         g.speed = 4;
-        g.ball.dx = (Math.random() > 0.5 ? 1 : -1) * g.speed;
-        g.ball.dy = (Math.random() - 0.5) * 6;
+        g.ball.dx = 0;
+        g.ball.dy = 0;
+        scoreDelayUntilRef.current = timestamp + SCORE_DELAY_MS;
+        lastTimeRef.current = 0;
+
+        setTimeout(() => {
+          if (!gameStateRef.current) return;
+          const sg = gameStateRef.current;
+          sg.ball.dx = (Math.random() > 0.5 ? 1 : -1) * sg.speed;
+          sg.ball.dy = (Math.random() - 0.5) * 6;
+        }, SCORE_DELAY_MS);
+
+        gameStateRef.current = g;
+        setGameState({ ...g });
+
+        animId = requestAnimationFrame(loop);
+        return;
       }
 
       gameStateRef.current = g;
       setGameState({ ...g });
-    }, 1000 / 60);
+      animId = requestAnimationFrame(loop);
+    };
 
-    return () => clearInterval(loop);
-  }, [isSinglePlayer, isGameStarted, gameOver]);
+    animId = requestAnimationFrame(loop);
+
+    return () => cancelAnimationFrame(animId);
+  }, [isSinglePlayer, isGameStarted, gameOver, onHitFeedback]);
 
   // Initialize multiplayer from navigation state
   useEffect(() => {
@@ -169,7 +303,6 @@ const Game = () => {
       setGameReady(true);
       setConnecting(false);
       paddleYRef.current = gameData.gameState.paddle1.y;
-      // Clear navigation state so it doesn't re-init
       window.history.replaceState({}, document.title);
     }
   }, [token, isSinglePlayer]);
@@ -202,22 +335,43 @@ const Game = () => {
     socket.on('player-disconnected', onPlayerDisconnected);
 
     let animId;
-    const moveLoop = () => {
+    let mpLastTime = 0;
+    let mpPaddleVel = 0;
+
+    const moveLoop = (timestamp) => {
       const keys = keysRef.current;
       const state = useGameStore.getState();
       if (!state.isGameStarted || state.gameOver) {
+        mpLastTime = 0;
         animId = requestAnimationFrame(moveLoop);
         return;
       }
 
-      let moved = false;
-      if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) {
-        paddleYRef.current = Math.max(0, paddleYRef.current - PADDLE_SPEED);
-        moved = true;
+      if (mpLastTime === 0) {
+        mpLastTime = timestamp;
+        animId = requestAnimationFrame(moveLoop);
+        return;
       }
-      if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) {
-        paddleYRef.current = Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, paddleYRef.current + PADDLE_SPEED);
-        moved = true;
+
+      const rawDt = (timestamp - mpLastTime) / (1000 / 60);
+      const dt = Math.min(rawDt, 2);
+      mpLastTime = timestamp;
+
+      let accel = 0;
+      if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) accel -= PADDLE_ACCEL;
+      if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) accel += PADDLE_ACCEL;
+
+      if (accel !== 0) {
+        mpPaddleVel += accel * dt;
+        mpPaddleVel = Math.max(-PADDLE_SPEED, Math.min(PADDLE_SPEED, mpPaddleVel));
+      } else {
+        mpPaddleVel *= Math.pow(PADDLE_FRICTION, dt);
+        if (Math.abs(mpPaddleVel) < 0.1) mpPaddleVel = 0;
+      }
+
+      const moved = Math.abs(mpPaddleVel) > 0.05;
+      if (moved) {
+        paddleYRef.current = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, paddleYRef.current + mpPaddleVel * dt));
       }
 
       if (moved && state.roomId) {
@@ -358,7 +512,10 @@ const Game = () => {
               </div>
             </div>
 
-            <GameCanvas gameState={gameState} />
+            <GameCanvas
+              gameState={gameState}
+              lastHitTime={lastHitTimeRef.current}
+            />
 
             {!isGameStarted && (
               <div className="mt-4 text-center">

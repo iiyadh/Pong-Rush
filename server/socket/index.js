@@ -9,6 +9,7 @@ const PADDLE_WIDTH = 12;
 const PADDLE_HEIGHT = 120;
 const BALL_SIZE = 12;
 const WIN_SCORE = 11;
+const MAX_BALL_SPEED = 14;
 const TICK_RATE = 1000 / 60;
 
 const gameRooms = new Map();
@@ -30,6 +31,8 @@ function startGameLoop(roomId, io) {
 
     const gs = room.gameState;
 
+    const prevBallX = gs.ball.x;
+
     gs.ball.x += gs.ball.dx;
     gs.ball.y += gs.ball.dy;
 
@@ -43,12 +46,13 @@ function startGameLoop(roomId, io) {
 
     if (
       gs.ball.dx < 0 &&
+      prevBallX - BALL_SIZE / 2 > p1x + PADDLE_WIDTH &&
       gs.ball.x - BALL_SIZE / 2 <= p1x + PADDLE_WIDTH &&
-      gs.ball.x - BALL_SIZE / 2 >= p1x &&
       gs.ball.y >= gs.paddle1.y &&
       gs.ball.y <= gs.paddle1.y + PADDLE_HEIGHT
     ) {
       gs.ball.dx = -gs.ball.dx * 1.05;
+      gs.ball.dx = Math.min(Math.abs(gs.ball.dx), MAX_BALL_SPEED) * Math.sign(gs.ball.dx);
       gs.ball.x = p1x + PADDLE_WIDTH + BALL_SIZE / 2;
       const hitPos = (gs.ball.y - gs.paddle1.y) / PADDLE_HEIGHT;
       gs.ball.dy = (hitPos - 0.5) * 8;
@@ -56,12 +60,13 @@ function startGameLoop(roomId, io) {
 
     if (
       gs.ball.dx > 0 &&
+      prevBallX + BALL_SIZE / 2 < p2x &&
       gs.ball.x + BALL_SIZE / 2 >= p2x &&
-      gs.ball.x + BALL_SIZE / 2 <= p2x + PADDLE_WIDTH &&
       gs.ball.y >= gs.paddle2.y &&
       gs.ball.y <= gs.paddle2.y + PADDLE_HEIGHT
     ) {
       gs.ball.dx = -gs.ball.dx * 1.05;
+      gs.ball.dx = Math.min(Math.abs(gs.ball.dx), MAX_BALL_SPEED) * Math.sign(gs.ball.dx);
       gs.ball.x = p2x - BALL_SIZE / 2;
       const hitPos = (gs.ball.y - gs.paddle2.y) / PADDLE_HEIGHT;
       gs.ball.dy = (hitPos - 0.5) * 8;
