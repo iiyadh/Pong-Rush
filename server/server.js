@@ -36,7 +36,7 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 app.use(cors({
-    origin: "https://pong-rush.onrender.com",
+    origin: "https://pong-rush-six.vercel.app",
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', "X-Requested-With"],
     credentials: true,
