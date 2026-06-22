@@ -380,18 +380,44 @@ const setupSocket = (server) => {
       for (const [roomId, room] of gameRooms) {
         const playerIndex = room.players.findIndex(p => p.userId === socket.userId);
         if (playerIndex !== -1) {
+          const disconnectedPlayer = room.players[playerIndex];
           room.players.splice(playerIndex, 1);
           delete room.playerReady[socket.userId];
 
           stopGameLoop(roomId);
 
-          io.to(roomId).emit('player-disconnected', {
-            username: socket.username
-          });
+          if (room.gameState && room.gameState.status === 'playing') {
+            const winner = room.players[0];
+            room.gameState.status = 'finished';
 
-          if (room.players.length === 0) {
-            gameRooms.delete(roomId);
+            io.to(roomId).emit('game-over', {
+              winner: winner.userId.toString(),
+              score: room.gameState.score,
+              disconnected: disconnectedPlayer.username
+            });
+
+            User.findById(winner.userId).then(user => {
+              if (user) user.updateStats('win', room.gameState.score.player1 || room.gameState.score.player2);
+            }).catch(console.error);
+
+            GameSession.findOneAndUpdate(
+              { roomId },
+              {
+                winner: winner.userId,
+                endedAt: new Date(),
+                duration: 60,
+                'gameState.status': 'finished'
+              }
+            ).catch(console.error);
+
+            io.emit('leaderboard-update');
+          } else {
+            io.to(roomId).emit('player-disconnected', {
+              username: socket.username
+            });
           }
+
+          gameRooms.delete(roomId);
           break;
         }
       }

@@ -98,6 +98,7 @@ const Game = () => {
     isGameReady,
     gameOver,
     winner,
+    disconnected,
     players,
     score,
     roomId,
@@ -322,7 +323,7 @@ const Game = () => {
     const onGameState = (newGameState) => setGameState(newGameState);
     const onGameOver = (data) => {
       console.log('[GAME] Received game-over:', data);
-      setGameOver(true, data.winner);
+      setGameOver(true, data.winner, data.disconnected || null);
     };
     const onPlayerDisconnected = () => {
       console.log('[GAME] Received player-disconnected');
@@ -459,6 +460,7 @@ const Game = () => {
         winner={winner}
         score={score}
         players={players}
+        disconnected={disconnected}
         onPlayAgain={handleLeaveGame}
         onLeave={handleLeaveGame}
       />

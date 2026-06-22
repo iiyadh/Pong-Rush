@@ -1,9 +1,9 @@
 import { useAuthStore } from '../../stores/authStore';
 import { Trophy, RotateCcw, LogOut, Star } from 'lucide-react';
 
-const GameOver = ({ winner, score, players, onPlayAgain, onLeave }) => {
+const GameOver = ({ winner, score, players, disconnected, onPlayAgain, onLeave }) => {
   const { user } = useAuthStore();
-  const isWinner = winner === user?.id;
+  const isWinner = disconnected ? winner === user?.id : winner === user?.id;
   const winnerPlayer = players.find(p => p.userId === winner);
 
   return (
@@ -22,11 +22,15 @@ const GameOver = ({ winner, score, players, onPlayAgain, onLeave }) => {
         <h1 className={`text-3xl font-bold mb-2 ${
           isWinner ? 'text-accent' : 'text-secondary'
         }`}>
-          {isWinner ? 'You Won!' : 'You Lost!'}
+          {disconnected
+            ? (isWinner ? 'You Won!' : 'Opponent Left')
+            : (isWinner ? 'You Won!' : 'You Lost!')}
         </h1>
         
         <p className="text-gray-400 mb-6">
-          {winnerPlayer?.username || 'Unknown Player'} wins the match
+          {disconnected
+            ? `${disconnected} disconnected — you win!`
+            : `${winnerPlayer?.username || 'Unknown Player'} wins the match`}
         </p>
 
         <div className="flex items-center justify-center gap-8 mb-8">
